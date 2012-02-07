@@ -1,0 +1,31 @@
+Name:                irc-enumerator
+Version:             0.1
+Synopsis:            Enumerator-based IRC client
+Homepage:            https://github.com/pqwy/irc-enumerator
+License:             BSD3
+Author:              David Kaloper
+Category:            Network
+
+Build-type:          Simple
+
+Cabal-version:       >=1.2
+
+Library
+
+  Hs-source-dirs: src
+
+  Exposed-modules:
+    Network.IRC.Enumerator.Message
+    Network.IRC.Enumerator.IO
+  
+  Other-modules:
+    Network.IRC.Enumerator.Message.Interp
+
+  Build-depends:
+      base         >= 4.4
+    , transformers >= 0.2.2
+    , bytestring   >= 0.9
+    , text         >= 0.11
+    , enumerator   >= 0.4.15
+    , attoparsec   >= 0.10.1
+

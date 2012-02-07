@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.HIRC.Message.Interp (
+module Network.IRC.Enumerator.Message.Interp (
     interp, Command (..), Error (..), Reply (..)
 ) where
 

@@ -1,9 +1,9 @@
-module Network.HIRC.Message (
+module Network.IRC.Enumerator.Message (
     Message (..), Purpose (..), Who (..), Command (..), Reply (..), Error (..)
   , message
 ) where
 
-import Network.HIRC.Message.Interp 
+import Network.IRC.Enumerator.Message.Interp 
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)

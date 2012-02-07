@@ -1,19 +1,18 @@
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE PackageImports  #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Network.HIRC.IO (
+module Network.IRC.Enumerator.IO (
 --     toMessage, enumIRC, enumIRCRaw
 ) where
 
-import Network.HIRC.Message
-import Network.HIRC.Message.Interp 
+import Network.IRC.Enumerator.Message
+import Network.IRC.Enumerator.Message.Interp 
 
 import Control.Applicative
 import Control.Arrow
 import Control.Category ( (>>>) )
 
 import Control.Monad.IO.Class
-import "mtl" Control.Monad.Trans
+import Control.Monad.Trans.Class
 
 import Data.Monoid
 
