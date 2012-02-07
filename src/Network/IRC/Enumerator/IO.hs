@@ -1,7 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns, DeriveDataTypeable, OverloadedStrings #-}
 
 module Network.IRC.Enumerator.IO (
---     toMessage, enumIRC, enumIRCRaw
+   toMessage, decode
 ) where
 
 import Network.IRC.Enumerator.Message
@@ -28,9 +28,19 @@ import           Data.Enumerator ( Iteratee, Enumeratee, joinI, ($$), (>>==) )
 import qualified Data.Enumerator      as E hiding ( map, head )
 import qualified Data.Enumerator.List as E ( map, head, concatMapAccum )
 
+import Control.Exception
+import Data.Typeable ( Typeable )
+
 import System.IO ( hPutStrLn, stderr )
 
 
+--
+-- Raw parsing
+--
+
+-- Parse a single line of IRC into a message. The line is expected to be
+-- stripped of its CRLF delimiter.
+-- 
 toMessage :: ByteString -> Maybe Message
 toMessage = either (\_ -> Nothing) Just . parseOnly pmessage
 
@@ -61,6 +71,42 @@ notSpNor x = takeWhile1 (\c -> not (isSpace c) && c /= x)
 dec :: [ByteString] -> [Text]
 dec = map (decodeUtf8With lenientDecode)
 
+--
+-- Raw encoding.
+-- 
+
+xx = xx
+
+--
+-- Enumeratee input.
+-- 
+
+data CantParse = CantParse ByteString
+    deriving (Typeable, Show)
+
+instance Exception CantParse
+
+-- Enumeratee from continuous ByteString input to a sequence of IRC messages.
+-- If a line can't be parsed, stops with an error, because we're reading serious
+-- gibberish.
+-- 
+decode :: (Monad m) => Enumeratee ByteString Message m t
+decode step = joinI $ enumCrLfLines $$ parse' step
+
+parse' :: (Monad m) => Enumeratee ByteString Message m t
+parse' s@(E.Continue k)
+    = E.head >>= \chunk ->
+        case chunk of
+             Nothing                      -> return s
+             Just (toMessage -> Just msg) -> k (E.Chunks [msg]) >>== parse'
+             Just bs                      -> E.throwError (CantParse bs)
+parse' s = return s
+
+-- Split incoming data on CRLF, as per IRC.
+-- 
+enumCrLfLines :: (Monad m) => Enumeratee ByteString ByteString m t
+enumCrLfLines = enumBlocks (((Just . last) &&& init) . splitOn "\r\n")
+
 enumBlocks :: (Monoid a, Monad m) => (a -> (Maybe a, [b])) -> Enumeratee a b m t
 enumBlocks blockf = E.concatMapAccum ((blockf.) . push) Nothing
   where
@@ -71,28 +117,4 @@ splitOn delim str =
     case delim `BS.breakSubstring` str of
          (pre, ""  ) -> [ pre ]
          (pre, post) -> pre : delim `splitOn` BS.drop (BS.length delim) post
-
-enumLines :: (Monad m) => Enumeratee ByteString ByteString m t
-enumLines = enumBlocks (((Just . last) &&& init) . splitOn "\r\n")
-
-enumIRCRaw :: (Monad m) => Enumeratee ByteString (Either ByteString Message) m t
-enumIRCRaw step = joinI $ enumLines $$ E.map decode step
-  where
-    decode bs = Left bs `maybe` Right $ toMessage bs
-
-split :: (Monad m) => (a -> m t1) -> Enumeratee (Either a b) b m t2
-split onErr s@(E.Continue k1)
-    = E.head >>= \blk ->
-        case blk of
-             Nothing        -> return s
-             Just (Left a)  -> lift (onErr a) >> split onErr s
-             Just (Right b) -> k1 (E.Chunks [b]) >>== split onErr
-split onErr s = return s
-
-enumIRCWith :: (Monad m) => (ByteString -> m a) -> Enumeratee ByteString Message m t
-enumIRCWith onErr step = joinI $ enumIRCRaw $$ split onErr step
-
-enumIRC :: (MonadIO m) => Enumeratee ByteString Message m t
-enumIRC = enumIRCWith $ \bs ->
-            liftIO $ hPutStrLn stderr $ "[warning] unparsed line: " ++ show bs
 
