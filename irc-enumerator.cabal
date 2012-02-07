@@ -1,31 +1,45 @@
-Name:                irc-enumerator
-Version:             0.1
-Synopsis:            Enumerator-based IRC client
-Homepage:            https://github.com/pqwy/irc-enumerator
-License:             BSD3
-Author:              David Kaloper
-Category:            Network
+name:                irc-enumerator
+version:             0.1
+stability:           Alpha
+license:             BSD3
+synopsis:            Enumerator-based IRC package.
+homepage:            https://github.com/pqwy/irc-enumerator
+author:              David Kaloper
+category:            Network, Enumerator
+description:
+    Simple and fast IRC library, based on attoparsec and iteratee IO. The goal
+    is not to do too much, leaving you to structure the logic above the
+    protocol.
+build-type:          Simple
+cabal-version:       >= 1.6
 
-Build-type:          Simple
+flag logger
+    description: Build a simple logger client.
+    default: False
 
-Cabal-version:       >=1.2
+library
 
-Library
+  hs-source-dirs: src
 
-  Hs-source-dirs: src
-
-  Exposed-modules:
+  exposed-modules:
     Network.IRC.Enumerator.Message
     Network.IRC.Enumerator.IO
   
-  Other-modules:
+  other-modules:
     Network.IRC.Enumerator.Message.Interp
 
-  Build-depends:
+  build-depends:
       base         >= 4.4
     , transformers >= 0.2.2
     , bytestring   >= 0.9
     , text         >= 0.11
     , enumerator   >= 0.4.15
     , attoparsec   >= 0.10.1
+
+executable irc-logger
+    main-is: logger.hs
+    if flag(logger)
+        Buildable: True
+    else
+        Buildable: False
 
