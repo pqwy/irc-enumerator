@@ -3,9 +3,8 @@ module Network.IRC.Enumerator.Message (
   , message
 ) where
 
-import Network.IRC.Enumerator.Message.Interp 
+import Network.IRC.Enumerator.Message.Command 
 
-import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
 
 data Message = Message Who Purpose [Text]
@@ -17,8 +16,8 @@ data Purpose = Command Command
     deriving Show
 
 data Who = Nobody
-         | Server ByteString
-         | User ByteString ByteString ByteString
+         | Server Text
+         | User Text Text Text
     deriving Show
 
 message :: Command -> [Text] -> Message
