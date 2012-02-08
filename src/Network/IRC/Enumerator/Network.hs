@@ -1,8 +1,8 @@
 {-# LANGUAGE NamedFieldPuns, OverloadedStrings #-}
-{-# LANGUAGE NoMonomorphismRestriction  #-}
 
-module Network.IRC.Enumerator.Network
-where
+module Network.IRC.Enumerator.Network (
+    enumIRC, enumIRC', iterMessages
+) where
 
 import Network.IRC.Enumerator.Message
 import Network.IRC.Enumerator.Protocol
@@ -52,7 +52,7 @@ enumIRC' :: MonadIO m => (NS.Socket -> Iteratee Message m b) -> NS.HostName -> M
 enumIRC' consumer host port = do
     sock <- connect host port
     -- XXX FIXME does not catch hard async exceptions, needs monadcontrol
-    NSE.enumSocket 4096 sock $$ decode =$ consumer sock
+    ( NSE.enumSocket 4096 sock $$ decode =$ consumer sock )
         `finallyE` liftIO (NS.shutdown sock NS.ShutdownBoth)
 
 enumIRC :: (MonadIO m)

@@ -17,7 +17,6 @@ import Control.Monad.Trans.Class
 
 import Data.Monoid
 import Data.Maybe
-import Data.List ( intersperse )
 
 import           Data.Attoparsec.ByteString.Char8
 import           Data.ByteString.Char8 ( ByteString )
@@ -34,8 +33,6 @@ import qualified Data.Enumerator.List as E ( map, head, concatMapAccum )
 
 import Control.Exception
 import Data.Typeable ( Typeable )
-
-import System.IO ( hPutStrLn, stderr )
 
 
 --
@@ -64,7 +61,7 @@ pwho = char ':' *>
         <|> (Server . dec) <$> notSp )
       <|> pure Nobody
   where
-    isUserName c = any ($c) [ isAlpha_ascii, isDigit, inClass "[]\\`^{}|-]" ]
+    isUserName c = any ($ c) [ isAlpha_ascii, isDigit, inClass "[]\\`^{}|-" ]
 
 ppurp :: Parser Purpose
 ppurp = (special <$> ( do I n <- number
