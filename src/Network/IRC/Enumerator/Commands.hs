@@ -3,6 +3,7 @@
 module Network.IRC.Enumerator.Commands
 where
 
+import Data.Monoid
 
 import Network.IRC.Enumerator.Message
 
@@ -19,7 +20,7 @@ instance Param Int where params = undefined
 instance (Param p) => Param (Maybe p) where params = maybe [] params
 
 instance (Param p) => Param [p] where
-    params = intersperse "," . (params =<<)
+    params ps = [ mconcat (intersperse "," (params =<< ps)) ]
 
 class CmdBuilder c where msg :: Command -> ([Text] -> [Text]) -> c
 

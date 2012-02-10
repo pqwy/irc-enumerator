@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns, OverloadedStrings #-}
 
 module Network.IRC.Enumerator.Network (
-    enumIRC, enumIRC', iterMessages
+    enumIRC, enumIRC', iterMessages, reaction
 ) where
 
 import Network.IRC.Enumerator.Message
@@ -17,7 +17,7 @@ import Data.Monoid
 
 import qualified Data.ByteString.Char8 as BS
 
-import           Data.Enumerator ( Iteratee, Enumeratee, ($$), (>>==), ($=), (=$) )
+import           Data.Enumerator ( Iteratee, Enumeratee, Enumerator, ($$), (>>==), ($=), (=$) )
 import qualified Data.Enumerator as E
 import qualified Data.Enumerator.List as EL
 
@@ -30,8 +30,8 @@ import qualified Network.Socket.ByteString as NS
 import qualified Network.Socket.Enumerator as NSE
 
 
-connect :: (MonadIO m) => NS.HostName -> Maybe Int -> Iteratee a m NS.Socket
-connect host port = E.tryIO $ do
+connect :: (MonadIO m) => (NS.HostName, Maybe Int) -> Iteratee a m NS.Socket
+connect (host, port) = E.tryIO $ do
     (addr:_) <- NS.getAddrInfo (Just hints) (Just host) (show <$> port')
     sock <- NS.socket (NS.addrFamily addr) (NS.addrSocketType addr)
                       (NS.addrProtocol addr)
@@ -48,32 +48,34 @@ finallyE a1 a2 = (a1 `E.catchError` \e -> a2 >> E.throwError e) <* a2
 iterMessages :: (MonadIO m) => NS.Socket -> Iteratee Message m ()
 iterMessages socket = EL.map fromMessage =$ NSE.iterSocket socket
 
-enumIRC' :: MonadIO m => (NS.Socket -> Iteratee Message m b) -> NS.HostName -> Maybe Int -> Iteratee BS.ByteString m b
-enumIRC' consumer host port = do
-    sock <- connect host port
-    -- XXX FIXME does not catch hard async exceptions, needs monadcontrol
+enumIRC' :: MonadIO m => (NS.HostName, Maybe Int) -> (NS.Socket -> Iteratee Message m b) -> Iteratee BS.ByteString m b
+enumIRC' hp consumer = do
+    sock <- connect hp
     ( NSE.enumSocket 4096 sock $$ decode =$ consumer sock )
         `finallyE` liftIO (NS.shutdown sock NS.ShutdownBoth)
 
 enumIRC :: (MonadIO m)
-        => (Iteratee Message m () -> Iteratee Message m b)
+        => (NS.HostName, Maybe Int)
         -> [Message]
-        -> NS.HostName
-        -> Maybe Int
+        -> (Iteratee Message m () -> Iteratee Message m b)
         -> Iteratee BS.ByteString m b
-enumIRC consumer handshake = enumIRC' $ \sock ->
-    EL.zipWith (flip const) (housekeep $$ iterMessages sock)
+enumIRC hp handshake consumer = enumIRC' hp $ \sock ->
+    EL.zipWith (flip const) (housekeep (iterMessages sock))
                             (consumer (iterMessages sock))
   where
-    housekeep = E.checkContinue0 $ \_ out -> pong $ out (E.Chunks handshake)
+    housekeep out = pong $ enumList' handshake $$ out
 
-pong :: Monad m => Iteratee Message m () -> Iteratee Message m ()
---  pong :: MonadIO m => Iteratee Message m () -> Iteratee Message m ()
-pong out = EL.concatMap f =$ out
---  pong out = ( joinI $ EL.concatMap f $$ EL.zip out (E.printChunks True) ) >> return ()
+reaction :: (Monad m) => (Message -> m [Message]) -> Iteratee Message m () -> Iteratee Message m ()
+reaction f out = EL.concatMapM f =$ out
+
+pong :: (Monad m) => Iteratee Message m () -> Iteratee Message m ()
+pong = reaction (return . f)
   where
     f (Message _ (Command PING) (s1:ss)) = [ C.pong s1 (listToMaybe ss) ]
     f _                                  = []
 
---  react :: (MonadIO m) => 
+-- The new regular enumList of enumerator-0.5
+enumList' :: (Monad m) => [a] -> Enumerator a m b
+enumList' as@(_:_) (E.Continue k) = k (E.Chunks as)
+enumList' _        s              = E.returnI s
 
