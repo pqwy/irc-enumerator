@@ -46,7 +46,7 @@ finallyE :: (Monad m) => Iteratee a m b -> Iteratee a m c -> Iteratee a m b
 finallyE a1 a2 = (a1 `E.catchError` \e -> a2 >> E.throwError e) <* a2
 
 iterMessages :: (MonadIO m) => NS.Socket -> Iteratee Message m ()
-iterMessages socket = EL.map fromMessage =$ NSE.iterSocket socket
+iterMessages socket = encode =$ NSE.iterSocket socket
 
 enumIRC' :: MonadIO m => (NS.HostName, Maybe Int) -> (NS.Socket -> Iteratee Message m b) -> Iteratee BS.ByteString m b
 enumIRC' hp consumer = do

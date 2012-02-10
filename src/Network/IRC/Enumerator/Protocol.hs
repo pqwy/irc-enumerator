@@ -1,10 +1,11 @@
 {-# LANGUAGE ViewPatterns, DeriveDataTypeable, OverloadedStrings #-}
 
 module Network.IRC.Enumerator.Protocol (
-   toMessage, decode, fromMessage
+   toMessage, fromMessage, decode, encode
 ) where
 
 import Network.IRC.Enumerator.Message
+import qualified Network.IRC.Enumerator.Message as M
 import Network.IRC.Enumerator.Message.Command 
 
 import Control.Monad
@@ -27,9 +28,8 @@ import qualified Data.Text as T
 import           Data.Text.Encoding       ( decodeUtf8With, encodeUtf8 )
 import           Data.Text.Encoding.Error ( lenientDecode )
 
-import           Data.Enumerator ( Iteratee, Enumeratee, ($$), (>>==), (=$) )
-import qualified Data.Enumerator      as E hiding ( map, head )
-import qualified Data.Enumerator.List as E ( map, head, concatMapAccum )
+import           Data.Enumerator hiding ( map, mapM, head, last )
+import qualified Data.Enumerator.List as E ( map, mapM, head, concatMapAccum )
 
 import Control.Exception
 import Data.Typeable ( Typeable )
@@ -64,13 +64,13 @@ pwho = char ':' *>
     isUserName c = any ($ c) [ isAlpha_ascii, isDigit, inClass "[]\\`^{}|-" ]
 
 ppurp :: Parser Purpose
-ppurp = (special <$> ( do I n <- number
-                          return (fromInteger n)) )
+ppurp = (special <$> ( do (I n) <- number
+                          return $ fromInteger n ))
         <|> (cmd <$> notSp)
   where
     special n = force ($ n)
                 [ fmap Reply . knownReply
-                , fmap Error . knownError
+                , fmap M.Error . knownError
                 , Just . Reply . OtherReply ]
     cmd b     = Command $ force ($ b) [ knownCommand , Just . C . dec ]
 
@@ -94,7 +94,7 @@ dec = decodeUtf8With lenientDecode
 -- XXX the "XXX" in the output requires bimaps.
 fromMessage :: Message -> ByteString
 fromMessage (Message who purpose args)
-    = encodeUtf8 $ mconcat [ prefix who, command purpose, rest args, "\r\n" ]
+    = encodeUtf8 $ mconcat [ prefix who, command purpose, rest args ]
   where
     prefix Nobody       = ""
     prefix (Server s)   = s                           |+| " "
@@ -113,13 +113,19 @@ fromMessage (Message who purpose args)
 (|+|) = mappend
 
 --
--- Enumeratee input.
+-- Enumeratee io.
 -- 
+
+crlf :: ByteString
+crlf = "\r\n"
 
 data CantParse = CantParse ByteString
     deriving (Typeable, Show)
 
 instance Exception CantParse
+
+toMessageErr :: (Monad m) => BS.ByteString -> Iteratee a m Message
+toMessageErr bs = throwError (CantParse bs) `maybe` return $ toMessage bs
 
 -- Enumeratee from continuous ByteString input to a sequence of IRC messages.
 -- If a line can't be parsed, stops with an error, because we're reading serious
@@ -130,27 +136,25 @@ decode :: (Monad m) => Enumeratee ByteString Message m t
 decode step = enumCrLfLines =$ parse' step
 
 parse' :: (Monad m) => Enumeratee ByteString Message m t
-parse' s@(E.Continue k)
-    = E.head >>= \chunk ->
-        case chunk of
-             Nothing                      -> return s
-             Just (toMessage -> Just msg) -> k (E.Chunks [msg]) >>== parse'
-             Just bs                      -> E.throwError (CantParse bs)
-parse' s = return s
+parse' = checkDone (continue . step) where
+    step k EOF         = yield (Continue k) EOF
+    step k (Chunks xs) = do msgs <- mapM toMessageErr xs
+                            k (Chunks msgs) >>== parse'
 
--- Split incoming data on CRLF, as per IRC.
--- 
 enumCrLfLines :: (Monad m) => Enumeratee ByteString ByteString m t
-enumCrLfLines = enumBlocks (((Just . last) &&& init) . splitOn "\r\n")
-
-enumBlocks :: (Monoid a, Monad m) => (a -> (Maybe a, [b])) -> Enumeratee a b m t
-enumBlocks blockf = E.concatMapAccum ((blockf.) . push) Nothing
-  where
-    push ma a = maybe a (`mappend` a) ma
+enumCrLfLines = E.concatMapAccum aux "" where
+    aux = (((last &&& init) . splitOn crlf) .) . mappend
 
 splitOn :: ByteString -> ByteString -> [ByteString]
 splitOn delim str =
     case delim `BS.breakSubstring` str of
          (pre, ""  ) -> [ pre ]
          (pre, post) -> pre : delim `splitOn` BS.drop (BS.length delim) post
+
+encode :: (Monad m) => Enumeratee Message ByteString m t
+encode = checkDone (continue . step) where
+    step k EOF         = yield (Continue k) EOF
+    step k (Chunks xs) = k (Chunks [encoded]) >>== encode
+      where
+        encoded = mconcat [ a | m <- xs, a <- [fromMessage m, crlf] ]
 
