@@ -11,9 +11,9 @@ description:
     is not to do too much, leaving you to structure the logic above the
     protocol.
 build-type:          Simple
-cabal-version:       >= 1.6
+cabal-version:       >= 1.8
 
-flag logger
+flag bot
     description: Build a simple logger client.
     default: False
 
@@ -23,23 +23,35 @@ library
 
   exposed-modules:
     Network.IRC.Enumerator.Message
-    Network.IRC.Enumerator.IO
+    Network.IRC.Enumerator.Commands
+    Network.IRC.Enumerator.Protocol
+    Network.IRC.Enumerator.Network
   
   other-modules:
-    Network.IRC.Enumerator.Message.Interp
+    Network.IRC.Enumerator.Message.Command
 
   build-depends:
-      base         >= 4.4
-    , transformers >= 0.2.2
-    , bytestring   >= 0.9
-    , text         >= 0.11
-    , enumerator   >= 0.4.15
-    , attoparsec   >= 0.10.1
+      base               >= 4.4
+    , containers         >= 0.4
+    , transformers       >= 0.2.2
+    , bytestring         >= 0.9
+    , text               >= 0.11
+    , attoparsec         >= 0.10.1
+    , enumerator         >= 0.4.16
+    , network            >= 2.3
+    , network-enumerator >= 0.1.2
 
-executable irc-logger
-    main-is: logger.hs
-    if flag(logger)
-        Buildable: True
-    else
-        Buildable: False
+executable irc-dumper
+  main-is: bot.hs
+  if flag(bot)
+    Buildable: True
+  else
+    Buildable: False
+
+  build-depends:
+      irc-enumerator     -any
+    , base               >= 4.4
+    , text               >= 0.11
+    , enumerator         >= 0.4.16
+
 

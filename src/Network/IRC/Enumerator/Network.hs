@@ -42,12 +42,6 @@ connect (host, port) = E.tryIO $ do
                             , NS.addrSocketType = NS.Stream }
     port' = port `mplus` Just 6667
 
-finallyE :: (Monad m) => Iteratee a m b -> Iteratee a m c -> Iteratee a m b
-finallyE a1 a2 = (a1 `E.catchError` \e -> a2 >> E.throwError e) <* a2
-
-iterMessages :: (MonadIO m) => NS.Socket -> Iteratee Message m ()
-iterMessages socket = encode =$ NSE.iterSocket socket
-
 enumIRC' :: MonadIO m => (NS.HostName, Maybe Int) -> (NS.Socket -> Iteratee Message m b) -> Iteratee BS.ByteString m b
 enumIRC' hp consumer = do
     sock <- connect hp
@@ -73,6 +67,12 @@ pong = reaction (return . f)
   where
     f (Message _ (Command PING) (s1:ss)) = [ C.pong s1 (listToMaybe ss) ]
     f _                                  = []
+
+finallyE :: (Monad m) => Iteratee a m b -> Iteratee a m c -> Iteratee a m b
+finallyE a1 a2 = (a1 `E.catchError` \e -> a2 >> E.throwError e) <* a2
+
+iterMessages :: (MonadIO m) => NS.Socket -> Iteratee Message m ()
+iterMessages socket = encode =$ NSE.iterSocket socket
 
 -- The new regular enumList of enumerator-0.5
 enumList' :: (Monad m) => [a] -> Enumerator a m b
