@@ -19,7 +19,7 @@ import Control.Monad.Trans.Class
 import Data.Monoid
 import Data.Maybe
 
-import           Data.Attoparsec.ByteString.Char8
+import           Data.Attoparsec.ByteString.Char8 hiding ( parse )
 import           Data.ByteString.Char8 ( ByteString )
 import qualified Data.ByteString.Char8 as BS
 
@@ -29,7 +29,8 @@ import           Data.Text.Encoding       ( decodeUtf8With, encodeUtf8 )
 import           Data.Text.Encoding.Error ( lenientDecode )
 
 import           Data.Enumerator hiding ( map, mapM, head, last )
-import qualified Data.Enumerator.List as E ( map, mapM, head, concatMapAccum )
+import qualified Data.Enumerator      as E hiding ( map )
+import qualified Data.Enumerator.List as E
 
 import Control.Exception
 import Data.Typeable ( Typeable )
@@ -119,9 +120,7 @@ fromMessage (Message who purpose args)
 crlf :: ByteString
 crlf = "\r\n"
 
-data CantParse = CantParse ByteString
-    deriving (Typeable, Show)
-
+data CantParse = CantParse ByteString deriving (Typeable, Show)
 instance Exception CantParse
 
 toMessageErr :: (Monad m) => BS.ByteString -> Iteratee a m Message
@@ -132,14 +131,7 @@ toMessageErr bs = throwError (CantParse bs) `maybe` return $ toMessage bs
 -- gibberish.
 -- 
 decode :: (Monad m) => Enumeratee ByteString Message m t
---  decode = enumCrLfLines =$= parse'  -- enumerator 0.4.18
-decode step = enumCrLfLines =$ parse' step
-
-parse' :: (Monad m) => Enumeratee ByteString Message m t
-parse' = checkDone (continue . step) where
-    step k EOF         = yield (Continue k) EOF
-    step k (Chunks xs) = do msgs <- mapM toMessageErr xs
-                            k (Chunks msgs) >>== parse'
+decode step = enumCrLfLines =$ E.sequence (E.head_ >>= toMessageErr) step
 
 enumCrLfLines :: (Monad m) => Enumeratee ByteString ByteString m t
 enumCrLfLines = E.concatMapAccum aux "" where
@@ -152,9 +144,5 @@ splitOn delim str =
          (pre, post) -> pre : delim `splitOn` BS.drop (BS.length delim) post
 
 encode :: (Monad m) => Enumeratee Message ByteString m t
-encode = checkDone (continue . step) where
-    step k EOF         = yield (Continue k) EOF
-    step k (Chunks xs) = k (Chunks [encoded]) >>== encode
-      where
-        encoded = mconcat [ a | m <- xs, a <- [fromMessage m, crlf] ]
+encode = E.map (\m -> fromMessage m |+| crlf)
 
